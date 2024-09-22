@@ -8,4 +8,5 @@ parameters:
   csi.storage.k8s.io/provisioner-secret-namespace: juicefs
   csi.storage.k8s.io/node-publish-secret-name: juicefs-secret
   csi.storage.k8s.io/node-publish-secret-namespace: juicefs
+  juicefs/mount-image: harbor.zetyun.cn/dingofs/juicefs-mount:ce-v1.2.0
 reclaimPolicy: Retain
