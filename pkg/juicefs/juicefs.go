@@ -40,6 +40,7 @@ import (
 	k8sexec "k8s.io/utils/exec"
 	"k8s.io/utils/mount"
 
+	"github.com/juicedata/juicefs-csi-driver/pkg/common"
 	"github.com/juicedata/juicefs-csi-driver/pkg/config"
 	podmount "github.com/juicedata/juicefs-csi-driver/pkg/juicefs/mount"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
@@ -341,7 +342,7 @@ func (j *juicefs) genJfsSettings(ctx context.Context, volumeID string, target st
 	}
 	jfsSetting.TargetPath = target
 	// get unique id
-	uniqueId, err := j.getUniqueId(ctx, volumeID)
+	uniqueId, err := j.getUniqueId(ctx, volumeID) // e.g. pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal
 	if err != nil {
 		log.Error(err, "Get volume name by volume id error", "volumeID", volumeID)
 		return nil, err
@@ -517,8 +518,8 @@ func (j *juicefs) JfsUnmount(ctx context.Context, volumeId, mountPath string) er
 	}
 	// get pod by label
 	labelSelector := &metav1.LabelSelector{MatchLabels: map[string]string{
-		config.PodTypeKey:          config.PodTypeValue,
-		config.PodUniqueIdLabelKey: uniqueId,
+		common.PodTypeKey:          common.PodTypeValue,
+		common.PodUniqueIdLabelKey: uniqueId,
 	}}
 	fieldSelector := &fields.Set{"spec.nodeName": config.NodeName}
 	pods, err := j.K8sClient.ListPod(ctx, config.Namespace, labelSelector, fieldSelector)
@@ -537,7 +538,7 @@ func (j *juicefs) JfsUnmount(ctx context.Context, volumeId, mountPath string) er
 	}
 	if mountPod != nil {
 		podName = mountPod.Name
-		hashVal = mountPod.Labels[config.PodJuiceHashLabelKey]
+		hashVal = mountPod.Labels[common.PodJuiceHashLabelKey]
 		if hashVal == "" {
 			return fmt.Errorf("pod %s/%s has no hash label", mountPod.Namespace, mountPod.Name)
 		}
@@ -820,10 +821,10 @@ func (j *juicefs) MountFs(ctx context.Context, appInfo *config.AppInfo, jfsSetti
 	log := util.GenLog(ctx, jfsLog, "MountFs")
 	var mnt podmount.MntInterface
 	if jfsSetting.UsePod {
-		jfsSetting.MountPath = filepath.Join(config.PodMountBase, jfsSetting.UniqueId)
+		jfsSetting.MountPath = filepath.Join(config.PodMountBase, jfsSetting.UniqueId) // e.g. /jfs/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal
 		mnt = j.podMount
 	} else {
-		jfsSetting.MountPath = filepath.Join(config.MountBase, jfsSetting.UniqueId)
+		jfsSetting.MountPath = filepath.Join(config.MountBase, jfsSetting.UniqueId) // e.g. /var/lib/juicefs/volume/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd/out.txt
 		mnt = j.processMount
 	}
 

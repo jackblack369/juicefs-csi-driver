@@ -34,7 +34,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/juicedata/juicefs-csi-driver/pkg/config"
+	"github.com/juicedata/juicefs-csi-driver/pkg/common"
 	"github.com/juicedata/juicefs-csi-driver/pkg/juicefs"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
 	"github.com/juicedata/juicefs-csi-driver/pkg/util"
@@ -104,8 +104,8 @@ func (d *nodeService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	volCtx := req.GetVolumeContext()
 	log := klog.NewKlogr().WithName("NodePublishVolume")
-	if volCtx != nil && volCtx[config.PodInfoName] != "" {
-		log = log.WithValues("appName", volCtx[config.PodInfoName])
+	if volCtx != nil && volCtx[common.PodInfoName] != "" {
+		log = log.WithValues("appName", volCtx[common.PodInfoName])
 	}
 	volumeID := req.GetVolumeId()
 	log = log.WithValues("volumeId", volumeID)
@@ -154,6 +154,7 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	mountOptions = append(mountOptions, options...)
 
+	// mound pod to mounting juicefs. e.g /usr/local/bin/juicefs redis://:xxx /jfs/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal -o metrics=0.0.0.0:9567
 	log.Info("mounting juicefs", "secret", reflect.ValueOf(secrets).MapKeys(), "options", mountOptions)
 	jfs, err := d.juicefs.JfsMount(ctx, volumeID, target, secrets, volCtx, mountOptions)
 	if err != nil {
