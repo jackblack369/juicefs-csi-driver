@@ -154,6 +154,7 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	mountOptions = append(mountOptions, options...)
 
+	// mound pod to mounting juicefs. e.g /usr/local/bin/juicefs redis://:xxx /jfs/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal -o metrics=0.0.0.0:9567
 	log.Info("mounting juicefs", "secret", reflect.ValueOf(secrets).MapKeys(), "options", mountOptions)
 	jfs, err := d.juicefs.JfsMount(ctx, volumeID, target, secrets, volCtx, mountOptions)
 	if err != nil {

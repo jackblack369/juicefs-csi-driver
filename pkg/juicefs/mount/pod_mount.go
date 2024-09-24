@@ -337,7 +337,7 @@ func (p *PodMount) genMountPodName(ctx context.Context, jfsSetting *jfsConfig.Jf
 func (p *PodMount) createOrAddRef(ctx context.Context, podName string, jfsSetting *jfsConfig.JfsSetting, appinfo *jfsConfig.AppInfo) (err error) {
 	log := p.log.WithName("createOrAddRef")
 	log.V(1).Info("mount pod", "podName", podName)
-	jfsSetting.MountPath = jfsSetting.MountPath + podName[len(podName)-7:]
+	jfsSetting.MountPath = jfsSetting.MountPath + podName[len(podName)-7:] // e.g. /jfs/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal
 	jfsSetting.SecretName = fmt.Sprintf("juicefs-%s-secret", jfsSetting.UniqueId)
 	// mkdir mountpath
 	err = util.DoWithTimeout(ctx, 3*time.Second, func() error {

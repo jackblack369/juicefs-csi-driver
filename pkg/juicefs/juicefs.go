@@ -342,7 +342,7 @@ func (j *juicefs) genJfsSettings(ctx context.Context, volumeID string, target st
 	}
 	jfsSetting.TargetPath = target
 	// get unique id
-	uniqueId, err := j.getUniqueId(ctx, volumeID)
+	uniqueId, err := j.getUniqueId(ctx, volumeID) // e.g. pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal
 	if err != nil {
 		log.Error(err, "Get volume name by volume id error", "volumeID", volumeID)
 		return nil, err
@@ -821,10 +821,10 @@ func (j *juicefs) MountFs(ctx context.Context, appInfo *config.AppInfo, jfsSetti
 	log := util.GenLog(ctx, jfsLog, "MountFs")
 	var mnt podmount.MntInterface
 	if jfsSetting.UsePod {
-		jfsSetting.MountPath = filepath.Join(config.PodMountBase, jfsSetting.UniqueId)
+		jfsSetting.MountPath = filepath.Join(config.PodMountBase, jfsSetting.UniqueId) // e.g. /jfs/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal
 		mnt = j.podMount
 	} else {
-		jfsSetting.MountPath = filepath.Join(config.MountBase, jfsSetting.UniqueId)
+		jfsSetting.MountPath = filepath.Join(config.MountBase, jfsSetting.UniqueId) // e.g. /var/lib/juicefs/volume/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal/pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd/out.txt
 		mnt = j.processMount
 	}
 
