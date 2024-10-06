@@ -57,7 +57,7 @@ func newControllerService(k8sClient *k8sclient.K8sClient) (controllerService, er
 func (d *controllerService) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	log := klog.NewKlogr().WithName("CreateVolume")
 	// DEBUG only, secrets exposed in args
-	// klog.Infof("CreateVolume: called with args: %#v", req)
+	klog.Infof("CreateVolume: called with args: %#v", req)
 
 	if len(req.Name) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume Name cannot be empty")

@@ -257,6 +257,7 @@ func (j *juicefs) JfsMount(ctx context.Context, volumeID string, target string, 
 	if err := j.validTarget(target); err != nil {
 		return nil, err
 	}
+	// 🚨genJfsSettings get jfs settings and unique id, which will init juicefs fs by ceFormat
 	jfsSetting, err := j.genJfsSettings(ctx, volumeID, target, secrets, volCtx, options)
 	if err != nil {
 		return nil, err
@@ -341,7 +342,7 @@ func (j *juicefs) genJfsSettings(ctx context.Context, volumeID string, target st
 		return nil, err
 	}
 	jfsSetting.TargetPath = target
-	// get unique id
+	// get unique id, uniqueId is not uuid
 	uniqueId, err := j.getUniqueId(ctx, volumeID) // e.g. pvc-7175fc74-d52d-46bc-94b3-ad9296b726cd-alypal
 	if err != nil {
 		log.Error(err, "Get volume name by volume id error", "volumeID", volumeID)

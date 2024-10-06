@@ -1,0 +1,25 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: juicefs-sc
+provisioner: csi.juicefs.com
+parameters:
+  csi.storage.k8s.io/provisioner-secret-name: juicefs-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: juicefs
+  csi.storage.k8s.io/node-publish-secret-name: juicefs-secret
+  csi.storage.k8s.io/node-publish-secret-namespace: juicefs
+  juicefs/mount-image: harbor.zetyun.cn/dingofs/juicefs-mount:ce-v1.2.0
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: juicefs-sc-2
+provisioner: csi.juicefs.com
+parameters:
+  csi.storage.k8s.io/provisioner-secret-name: juicefs-secret-2
+  csi.storage.k8s.io/provisioner-secret-namespace: juicefs
+  csi.storage.k8s.io/node-publish-secret-name: juicefs-secret-2
+  csi.storage.k8s.io/node-publish-secret-namespace: juicefs
+  juicefs/mount-image: harbor.zetyun.cn/dingofs/juicefs-mount:ce-v1.2.0
+reclaimPolicy: Retain
