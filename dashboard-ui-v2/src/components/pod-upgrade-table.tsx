@@ -15,8 +15,14 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import { ProCard } from '@ant-design/pro-components'
-import { Button, Popover, Table, TableProps, Tooltip } from 'antd'
+import { ProCard, ProColumns, ProTable } from '@ant-design/pro-components'
+import {
+  Button,
+  Popover,
+  TableProps,
+  Tooltip,
+  type TablePaginationConfig,
+} from 'antd'
 import { Badge } from 'antd/lib'
 import ReactDiffViewer from 'react-diff-viewer'
 import { FormattedMessage } from 'react-intl'
@@ -27,82 +33,93 @@ import { DiffIcon } from '@/icons'
 import {
   BatchConfig,
   MountPatch,
-  MountPodUpgrade,
   PodDiffConfig,
+  UpgradeJobWithDiff,
 } from '@/types/k8s.ts'
 import { getUpgradeStatusBadge } from '@/utils'
 
+interface UpgradeType {
+  key: string
+  name: string
+  status: string
+  diff: {
+    oldConfig?: MountPatch
+    newConfig?: MountPatch
+  }
+}
+
+const diffContent = (podDiff: {
+  oldConfig?: MountPatch
+  newConfig?: MountPatch
+}) => {
+  const oldData = YAML.stringify(podDiff.oldConfig)
+  const newData = YAML.stringify(podDiff.newConfig)
+  return (
+    <ReactDiffViewer
+      oldValue={oldData}
+      newValue={newData}
+      splitView={true}
+    ></ReactDiffViewer>
+  )
+}
+
 const PodUpgradeTable: React.FC<{
-  batchConfig?: BatchConfig
-  diffPods?: [PodDiffConfig]
+  upgradeJob?: UpgradeJobWithDiff
   diffStatus: Map<string, string>
+  failReasons: Map<string, string>
 }> = (props) => {
-  const { diffPods, batchConfig, diffStatus } = props
+  const { upgradeJob, diffStatus, failReasons } = props
   const [podMap, setPodMap] = useState<Map<string, PodDiffConfig>>()
+  const [mountPods, setMountPods] = useState<UpgradeType[]>([])
+  const [pagination, setPagination] = useState<TablePaginationConfig>({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+  })
 
   useEffect(() => {
     const newMap = new Map()
-    diffPods?.forEach((poddiff) => {
+    upgradeJob?.diffs?.forEach((poddiff) => {
       const podName = poddiff.pod?.metadata?.name || ''
       newMap.set(podName, poddiff)
     })
     setPodMap(newMap)
-  }, [diffPods])
-
-  interface UpgradeType {
-    key: string
-    name: string
-    status: string
-    diff: {
-      oldConfig?: MountPatch
-      newConfig?: MountPatch
-    }
-  }
-
-  const diffContent = (podDiff: UpgradeType) => {
-    const oldData = YAML.stringify(podDiff.diff.oldConfig)
-    const newData = YAML.stringify(podDiff.diff.newConfig)
-    return (
-      <ReactDiffViewer
-        oldValue={oldData}
-        newValue={newData}
-        splitView={true}
-      ></ReactDiffViewer>
-    )
-  }
-
-  const mountPods = (batchs: MountPodUpgrade[][]): UpgradeType[] => {
-    const pods = batchs.map((pods) => {
-      return podUpgradeData(pods)
+    const pods = upgradeJob?.config.batches.map((mp): UpgradeType[] => {
+      return mp.map((podUpgrade) => {
+        return {
+          key: podUpgrade.name,
+          name: podUpgrade.name,
+          status: diffStatus.get(podUpgrade.name) || '',
+          diff: {
+            oldConfig: newMap?.get(podUpgrade.name)?.oldConfig,
+            newConfig: newMap?.get(podUpgrade.name)?.newConfig,
+          },
+        }
+      })
     })
     const mountPodUpgrades: UpgradeType[] = []
-    for (let i = 0; i < pods.length; i++) {
-      for (let j = 0; j < pods[i].length; j++) {
-        mountPodUpgrades.push(pods[i][j])
+    if (pods) {
+      for (let i = 0; i < (pods.length || 0); i++) {
+        for (let j = 0; j < (pods[i].length || 0); j++) {
+          mountPodUpgrades.push(pods[i][j])
+        }
       }
     }
-    return mountPodUpgrades
-  }
+    setMountPods(mountPodUpgrades)
+  }, [upgradeJob, diffStatus])
 
-  const podUpgradeData = (podUpgrades: MountPodUpgrade[]) => {
-    return podUpgrades.map((podUpgrade) => {
-      return {
-        key: podUpgrade.name,
-        name: podUpgrade.name,
-        status: diffStatus.get(podUpgrade.name) || '',
-        diff: {
-          oldConfig: podMap?.get(podUpgrade.name)?.oldConfig,
-          newConfig: podMap?.get(podUpgrade.name)?.newConfig,
-        },
-      }
-    })
+  const handleTableChange: TableProps['onChange'] = (pagination) => {
+    setPagination(pagination)
   }
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, total: upgradeJob?.total || 0 }))
+  }, [upgradeJob?.total])
 
-  const upgradeColumn: TableProps<UpgradeType>['columns'] = [
+  const upgradeColumn: ProColumns<UpgradeType>[] = [
     {
       title: 'Mount Pods',
       key: 'name',
-      render: (podUpgrade) => (
+      render: (_, podUpgrade) => (
         <>
           {podMap?.get(podUpgrade.name)?.pod.metadata?.namespace || '' ? (
             <Link
@@ -119,32 +136,48 @@ const PodUpgradeTable: React.FC<{
     {
       title: <FormattedMessage id="upgradeStatus" />,
       key: 'status',
-      render: (podUpgrade) => (
-        <Badge
-          status={getUpgradeStatusBadge(
-            getPodUpgradeStatus(
-              podUpgrade.name,
-              diffStatus.get(podUpgrade.name) || 'pending',
-              batchConfig,
-            ),
-          )}
-          text={`${getPodUpgradeStatus(podUpgrade.name, diffStatus.get(podUpgrade.name) || 'pending', batchConfig)}`}
-        />
-      ),
+      render: (_, podUpgrade) => {
+        const podStatus = getPodUpgradeStatus(
+          podUpgrade.name,
+          diffStatus.get(podUpgrade.name) || 'pending',
+          upgradeJob?.config,
+        )
+        return (
+          <>
+            {podStatus !== 'fail' ? (
+              <Badge
+                status={getUpgradeStatusBadge(podStatus)}
+                text={podStatus}
+              />
+            ) : (
+              <Tooltip title={failReasons.get(podUpgrade.name) || ''}>
+                <Badge
+                  status={getUpgradeStatusBadge(podStatus)}
+                  text={podStatus}
+                />
+              </Tooltip>
+            )}
+          </>
+        )
+      },
     },
     {
       title: <FormattedMessage id="diff" />,
       key: 'diff',
-      render: (podDiff) => {
+      render: (_, podDiff) => {
         return (
           <Popover
-            content={diffContent(podDiff)}
+            content={diffContent(podDiff.diff)}
             title={<FormattedMessage id="diff" />}
             trigger="click"
           >
-            <Tooltip title={<FormattedMessage id="clickToViewDetail" />}>
-              <Button icon={<DiffIcon />} />
-            </Tooltip>
+            {diffStatus.get(podDiff.name) !== 'success' ? (
+              <Tooltip title={<FormattedMessage id="clickToViewDetail" />}>
+                <Button icon={<DiffIcon />} />
+              </Tooltip>
+            ) : (
+              <Button disabled={true} icon={<DiffIcon />} />
+            )}
           </Popover>
         )
       },
@@ -153,10 +186,14 @@ const PodUpgradeTable: React.FC<{
 
   return (
     <ProCard>
-      <Table<UpgradeType>
-        pagination={false}
+      <ProTable<UpgradeType>
         columns={upgradeColumn}
-        dataSource={mountPods(batchConfig?.batches || []) || []}
+        dataSource={mountPods}
+        onChange={handleTableChange}
+        search={false}
+        pagination={upgradeJob?.total ? pagination : false}
+        options={false}
+        rowKey={(row) => row.key}
       />
     </ProCard>
   )
@@ -169,7 +206,7 @@ const getPodUpgradeStatus = (
   statusFromLog: string,
   config?: BatchConfig,
 ): string => {
-  if (statusFromLog !== 'running') {
+  if (statusFromLog !== 'pending') {
     return statusFromLog
   }
   let status = statusFromLog

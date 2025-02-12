@@ -96,7 +96,7 @@ func (r *BaseBuilder) genCommonJuicePod(cnGen func() corev1.Container) *corev1.P
 	volumes, volumeMounts := r._genJuiceVolumes()
 	pod.Spec.Volumes = volumes
 	pod.Spec.Containers[0].VolumeMounts = volumeMounts
-	pod.Spec.Containers[0].Env = r.jfsSetting.Attr.Env
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, r.jfsSetting.Attr.Env...)
 	// set env key from secret
 	for _, key := range r.GetEnvKey() {
 		pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, corev1.EnvVar{
@@ -150,7 +150,6 @@ func (r *BaseBuilder) genMountCommand() string {
 	cmd := ""
 	options := r.jfsSetting.Options
 	if r.jfsSetting.IsCe {
-		builderLog.Info("ceMount", "source", util.StripPasswd(r.jfsSetting.Source), "mountPath", r.jfsSetting.MountPath)
 		mountArgs := []string{"exec", config.CeMountPath, "${metaurl}", security.EscapeBashStr(r.jfsSetting.MountPath)}
 		if !util.ContainsPrefix(options, "metrics=") {
 			if r.jfsSetting.Attr.HostNetwork {
@@ -163,7 +162,6 @@ func (r *BaseBuilder) genMountCommand() string {
 		mountArgs = append(mountArgs, "-o", security.EscapeBashStr(strings.Join(options, ",")))
 		cmd = strings.Join(mountArgs, " ")
 	} else {
-		builderLog.Info("eeMount", "source", util.StripPasswd(r.jfsSetting.Source), "mountPath", r.jfsSetting.MountPath)
 		mountArgs := []string{"exec", config.JfsMountPath, security.EscapeBashStr(r.jfsSetting.Source), security.EscapeBashStr(r.jfsSetting.MountPath)}
 		mountOptions := []string{"foreground", "no-update"}
 		if r.jfsSetting.EncryptRsaKey != "" {
@@ -282,7 +280,10 @@ func GenMetadata(jfsSetting *config.JfsSetting) (labels map[string]string, annot
 		labels[k] = v
 	}
 	for k, v := range jfsSetting.Attr.Annotations {
-		annotations[k] = v
+		if k != common.JfsUpgradeProcess {
+			// new pod do not need upgradeProcess annotation
+			annotations[k] = v
+		}
 	}
 	// inter labels & annotations
 	annotations[common.JuiceFSUUID] = jfsSetting.UUID

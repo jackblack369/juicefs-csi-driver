@@ -17,6 +17,7 @@ limitations under the License.
 package builder
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -92,6 +93,10 @@ var (
 				Image:   config.DefaultCEMountImage,
 				Command: []string{"sh", "-c", defaultCmd},
 				Env: []corev1.EnvVar{
+					{
+						Name:  "JFS_INSIDE_CONTAINER",
+						Value: "1",
+					},
 					{
 						Name: "metaurl",
 						ValueFrom: &corev1.EnvVarSource{
@@ -179,7 +184,7 @@ func Test_getCacheDirVolumes(t *testing.T) {
 			Type: &dir,
 		}}}}
 
-	s, _ := config.ParseSetting(map[string]string{"name": "test"}, nil, optionWithoutCacheDir, true, nil, nil)
+	s, _ := config.ParseSetting(context.TODO(), map[string]string{"name": "test"}, nil, optionWithoutCacheDir, "", "", "test", nil, nil)
 	s.HashVal = "test"
 	r.jfsSetting = s
 	cacheVolumes, cacheVolumeMounts := r.genCacheDirVolumes()
@@ -189,7 +194,7 @@ func Test_getCacheDirVolumes(t *testing.T) {
 		t.Error("getCacheDirVolumes can't work properly")
 	}
 
-	s, _ = config.ParseSetting(map[string]string{"name": "test"}, nil, optionWithCacheDir, true, nil, nil)
+	s, _ = config.ParseSetting(context.TODO(), map[string]string{"name": "test"}, nil, optionWithCacheDir, "", "", "test", nil, nil)
 	s.HashVal = "test"
 	r.jfsSetting = s
 	cacheVolumes, cacheVolumeMounts = r.genCacheDirVolumes()
@@ -199,7 +204,7 @@ func Test_getCacheDirVolumes(t *testing.T) {
 		t.Error("getCacheDirVolumes can't work properly")
 	}
 
-	s, _ = config.ParseSetting(map[string]string{"name": "test"}, nil, optionWithCacheDir2, true, nil, nil)
+	s, _ = config.ParseSetting(context.TODO(), map[string]string{"name": "test"}, nil, optionWithCacheDir2, "", "", "test", nil, nil)
 	s.HashVal = "test"
 	r.jfsSetting = s
 	cacheVolumes, cacheVolumeMounts = r.genCacheDirVolumes()
@@ -209,7 +214,7 @@ func Test_getCacheDirVolumes(t *testing.T) {
 		t.Error("getCacheDirVolumes can't work properly")
 	}
 
-	s, _ = config.ParseSetting(map[string]string{"name": "test"}, nil, optionWithCacheDir3, true, nil, nil)
+	s, _ = config.ParseSetting(context.TODO(), map[string]string{"name": "test"}, nil, optionWithCacheDir3, "", "", "test", nil, nil)
 	s.HashVal = "test"
 	r.jfsSetting = s
 	cacheVolumes, cacheVolumeMounts = r.genCacheDirVolumes()
@@ -241,6 +246,7 @@ func TestNewMountPod(t *testing.T) {
 	podEnvTest := corev1.Pod{}
 	deepcopyPodFromDefault(&podEnvTest)
 	podEnvTest.Spec.Containers[0].Env = []corev1.EnvVar{
+		{Name: "JFS_INSIDE_CONTAINER", Value: "1"},
 		{Name: "metaurl", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "juicefs-node-test"},
@@ -267,7 +273,7 @@ func TestNewMountPod(t *testing.T) {
 		MountPath: "/test",
 	}}, podConfigTest.Spec.Containers[0].VolumeMounts...)
 
-	s, _ := config.ParseSetting(map[string]string{"name": "test"}, nil, []string{"cache-dir=/dev/shm/imagenet-0:/dev/shm/imagenet-1", "cache-size=10240", "metrics=0.0.0.0:9567"}, true, nil, nil)
+	s, _ := config.ParseSetting(context.TODO(), map[string]string{"name": "test"}, nil, []string{"cache-dir=/dev/shm/imagenet-0:/dev/shm/imagenet-1", "cache-size=10240", "metrics=0.0.0.0:9567"}, "", "", "test", nil, nil)
 	s.HashVal = "test"
 	r := PodBuilder{
 		BaseBuilder: BaseBuilder{s, 0},

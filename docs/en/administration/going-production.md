@@ -16,9 +16,9 @@ Best practices and recommended settings when going production.
 
 ## Sidecar recommendations {#sidecar}
 
-Current CSI Driver doesn't support exit order of sidecar containers, this essentially means there's no guarantee that sidecar JuiceFS client exits only after application container termination. This can be rooted back to Kubernetes sidecar's own limitations, however, this changes in [v1.28](https://kubernetes.io/blog/2023/08/25/native-sidecar-containers) as native sidecar is supported. So if you're using newer Kubernetes and wish to use native sidecar, mark your requests at our [GitHub issue](https://github.com/juicedata/juicefs-csi-driver/issues/976).
+Starting from v0.27.0, CSI Driver supports Kubernetes [native sidecar containers](https://kubernetes.io/blog/2023/08/25/native-sidecar-containers). So if you are running Kubernetes v1.29 with CSI Driver v0.27.0 or newer versions, no special configurations are needed to ensure optimal exit order (sidecar containers terminate only after the application containers have exited).
 
-Hence, before our users widely adopt Kubernetes v1.28 (which allows us to implement native sidecar mount), we recommend that you use `preStop` to control exit order:
+But if your cluster does not yet meet the above version requirements, we recommend users configure the `preStop` lifecycle hook to control exit order:
 
 ```yaml
 mountPodPatch:
@@ -371,6 +371,15 @@ If however, a configuration file isn't used, then kubelet is configured purely v
       value: 5
   ```
 
+* Dashboard Disable manager function
+
+The JuiceFS CSI Dashboard defaults to enabling the manager function and uses listAndWatch to cache resources in the cluster. If your cluster is very large, you may consider disabling it (supported from version 0.26.1). After disabling, resources will only be fetched from the cluster when the user accesses the dashboard. At the same time, fuzzy search and better pagination features will be lost.
+
+  ```yaml title="values-mycluster.yaml"
+  dashboard:
+    enableManager: false
+  ```
+
 ## Client write cache (not recommended) {#client-write-cache}
 
 Even without Kubernetes, the client write cache (`--writeback`) is a feature that needs to be used with caution. Its function is to store the file data written by the client on the local disk and then asynchronously upload it to the object storage. This brings about a lot of user experience and data security issues, which are highlighted in the JuiceFS documentation:
@@ -427,3 +436,21 @@ Under the premise of fully understanding the risks of `--writeback`, if your sce
                   rmdir ${MOUNT_POINT}
                   exit 0
     ```
+
+## Avoid Using `fsGroup` {#avoid-using-fsgroup}
+
+JuiceFS does not support mapping the files in the file system to a specific Group ID when mounting. If you use `fsGroup` in your business Pod, the kubelet will recursively change the ownership and permissions of all files in the file system, which may cause your business Pod to start very slowly.
+
+If you must use `fsGroup`, you can modify the `fsGroupChangePolicy` field and set it to `OnRootMismatch`. This will only change the ownership and permissions of the contents when the owner and permissions of the root directory do not match the expected permissions of the volume. This setting helps to reduce the time required to change the ownership and permissions of the volume.
+
+```yaml title="my-pod.yaml"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: security-context-demo-2
+spec:
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 2000
+    fsGroupChangePolicy: "OnRootMismatch"
+```

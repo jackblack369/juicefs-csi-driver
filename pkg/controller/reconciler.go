@@ -18,8 +18,8 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +36,7 @@ import (
 
 const (
 	retryPeriod    = 5 * time.Second
-	maxRetryPeriod = 300 * time.Second
+	maxRetryPeriod = 60 * time.Second
 )
 
 var (
@@ -60,7 +60,7 @@ func StartReconciler() error {
 	}
 
 	// check if kubelet can be connected
-	_, err = kc.GetNodeRunningPods()
+	err = kc.Access()
 	if err != nil {
 		return err
 	}
@@ -86,6 +86,10 @@ func doReconcile(ks *k8sclient.K8sClient, kc *k8sclient.KubeletClient) {
 	backOff := flowcontrol.NewBackOff(retryPeriod, maxRetryPeriod)
 	lastPodStatus := make(map[string]PodStatus)
 	statusMu := sync.Mutex{}
+	mounter := mount.SafeFormatAndMount{
+		Interface: mount.New(""),
+		Exec:      k8sexec.New(),
+	}
 	for {
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), config.ReconcileTimeout)
 		g, ctx := errgroup.WithContext(timeoutCtx)
@@ -94,8 +98,12 @@ func doReconcile(ks *k8sclient.K8sClient, kc *k8sclient.KubeletClient) {
 		podList, err := kc.GetNodeRunningPods()
 		if err != nil {
 			reconcilerLog.Error(err, "doReconcile GetNodeRunningPods error")
-			goto finish
+			cancel()
+			time.Sleep(time.Duration(config.ReconcilerInterval) * time.Second)
+			continue
 		}
+		podDriver := NewPodDriver(ks, mounter, podList)
+		podDriver.SetMountInfo(*mit)
 
 		for i := range podList.Items {
 			pod := &podList.Items[i]
@@ -117,19 +125,12 @@ func doReconcile(ks *k8sclient.K8sClient, kc *k8sclient.KubeletClient) {
 				}
 			}
 
-			backOffID := fmt.Sprintf("mountpod/%s", pod.Name)
+			backOffID := "mountpod" // all pods share the same backoffID
 			if backOff.IsInBackOffSinceUpdate(backOffID, backOff.Clock.Now()) {
+				reconcilerLog.V(1).Info("in backoff, retry later", "name", pod.Name)
 				continue
 			}
 			g.Go(func() error {
-				mounter := mount.SafeFormatAndMount{
-					Interface: mount.New(""),
-					Exec:      k8sexec.New(),
-				}
-				podDriver := NewPodDriver(ks, mounter)
-				podDriver.SetMountInfo(*mit)
-				podDriver.mit.setPodsStatus(podList)
-
 				errChan := make(chan error, 1)
 				go func() {
 					defer close(errChan)
@@ -143,7 +144,12 @@ func doReconcile(ks *k8sclient.K8sClient, kc *k8sclient.KubeletClient) {
 					lastStatus.syncAt = time.Now()
 					if err != nil {
 						reconcilerLog.Error(err, "Driver check pod error, will retry", "name", pod.Name)
-						backOff.Next(backOffID, time.Now())
+						if strings.Contains(err.Error(), "client rate limiter Wait returned an error") {
+							reconcilerLog.V(1).Info("client rate limit")
+							backOff.Next(backOffID, time.Now())
+						} else {
+							backOff.Reset(backOffID)
+						}
 						lastStatus.nextSyncAt = time.Now()
 						errChan <- err
 						return
@@ -169,7 +175,8 @@ func doReconcile(ks *k8sclient.K8sClient, kc *k8sclient.KubeletClient) {
 		}
 		backOff.GC()
 		_ = g.Wait()
-	finish:
+		podList = nil
+
 		cancel()
 		time.Sleep(time.Duration(config.ReconcilerInterval) * time.Second)
 	}
